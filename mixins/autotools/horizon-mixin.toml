@@ -1,6 +1,6 @@
 [mod]
 id = "autotools"
-version = "1.0.0"
+version = "1.1.0"
 priority = 100
 
 # The commit the installed build already plays (`native-6475f62`), so this mod
@@ -8,6 +8,17 @@ priority = 100
 # of forcing a second, separate build. Re-pin it when that build is replaced.
 [compatibility]
 horizon_revision = "6475f62f3c834b7489e1816bf47f47ea5eb2b879"
+
+[[injection]]
+id = "highlight"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_block_highlight"
+helper = "highlight.rs"
+bindings = [
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "pos", ty = "[i32; 3]", value = "pos" },
+  { name = "state", ty = "horizon_world::registry::BlockStateId", value = "state" },
+]
 
 [[module]]
 id = "runtime"

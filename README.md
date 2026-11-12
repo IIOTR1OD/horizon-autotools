@@ -49,6 +49,24 @@ wood; gold ranks above netherite because vanilla mines faster with it). Anything
 is better than a bare hand, so a shovel still gets picked for dirt even when the
 block wanted a pickaxe.
 
+## v1.1: what changed
+
+The first version reached into the game's private raycast: `aim()`, `clip_ray()`,
+`world.block()`, `res.facts()`. Horizon's API grew since, so v1.1 takes the block
+from the game's own hook point instead:
+
+| need | v1.0 | v1.1 |
+|---|---|---|
+| block under the crosshair | private raycast | `native_block_highlight(pos, state, …)` (API 86) |
+| block name | `res.facts()` | `native_state_block(state)` (API 164) |
+| attack held | mouse hook | mouse hook (unchanged) |
+| hotbar contents | `Game::inventory` | `Game::inventory` (no client API yet) |
+| select a slot | `Game::selected` | `Game::selected` (no API yet) |
+
+The raycast and the block facts are gone; one field write remains, and the mod
+is still pinned to the commit it builds on. When Horizon gains a
+`select_slot`-style helper, the pin can go.
+
 ## Honest limitations
 
 - **Not compiled yet.** The user asked to defer the build (weak laptop), so this

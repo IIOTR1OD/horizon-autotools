@@ -1,19 +1,16 @@
-//! AutoTools: while the attack button is held, keep the fastest tool for the
-//! block under the crosshair in the player's hand.
+//! AutoTools 1.1: keep the fastest tool for the block under the crosshair in
+//! the player's hand while mining.
 //!
-//! This file is the module the bundle adds to `crates/horizon-client/src/game.rs`
-//! as `crate::game::autotools`, so it sees the game's private fields and helpers
-//! (`inventory`, `selected`, `world`, `res`, `aim`, `clip_ray`, `reach`).
-//!
-//! The mod does two things:
-//!   * `native_key` toggles it, on the key the player bound in Options > Mods;
-//!   * `native_tick` looks at the crosshair target once a tick and switches to
-//!     the hotbar slot whose tool suits that block best.
+//! Feedback from the first version: the target block now comes from Horizon's
+//! own hook point (`native_block_highlight`, API 86) instead of the mod calling
+//! the game's private raycast (`aim`, `clip_ray`, `world.block`, `res.facts`).
+//! What is left of the game's internals is one field: `Game::selected`, which
+//! has no stable API yet.
 use std::cell::Cell;
 
 /// The mod's id: its settings folder and its row in Options > Mods.
 pub const ID: &str = "autotools";
-pub const VERSION: &str = "1.0.0";
+pub const VERSION: &str = "1.1.0";
 pub const DESCRIPTION: &str =
     "Picks the fastest tool in your hotbar for the block you are mining. Toggle key, off by default.";
 /// The toggle key's name and its default: `~`/`` ` ``.
@@ -27,9 +24,13 @@ thread_local! {
     static ON: Cell<Option<bool>> = const { Cell::new(None) };
     /// Whether the attack button is down right now.
     static ATTACK: Cell<bool> = const { Cell::new(false) };
-    /// The slot this mod chose last, so it can tell its own switch from the
-    /// player's.
-    static CHOSEN: Cell<i32> = const { Cell::new(-1) };
+    /// What kind of tool the highlighted block wants, and the tick it was seen
+    /// on. The highlight hook runs every frame, so a stale entry means the
+    /// crosshair left the block.
+    static WANT: Cell<Option<Kind>> = const { Cell::new(None) };
+    static WANT_TICK: Cell<u32> = const { Cell::new(0) };
+    /// The tick counter, bumped by the tick hook.
+    static TICK: Cell<u32> = const { Cell::new(0) };
 }
 
 /// What kind of tool a block wants.
@@ -46,7 +47,7 @@ pub enum Kind {
 impl Kind {
     /// The tool item kinds, by the suffix of their id.
     fn of_item(item: &str) -> Option<(Kind, u8)> {
-        let (kind, tiers) = if let Some(rest) = item.strip_suffix("_pickaxe") {
+        let (kind, material) = if let Some(rest) = item.strip_suffix("_pickaxe") {
             (Kind::Pickaxe, rest)
         } else if let Some(rest) = item.strip_suffix("_axe") {
             (Kind::Axe, rest)
@@ -61,21 +62,19 @@ impl Kind {
         } else {
             return None;
         };
-        Some((kind, tier_of(tiers)))
+        Some((kind, tier_of(material)))
     }
 
-    /// Whether this tool is the right one for the block, and how well.
-    fn score(self, want: Option<Kind>) -> Option<u8> {
+    /// Whether this tool fits the block, and how well.
+    fn score(self, want: Kind) -> Option<u8> {
         match (want, self) {
             // Shears beat everything on what they are for.
-            (Some(Kind::Shears), Kind::Shears) => Some(3),
+            (Kind::Shears, Kind::Shears) => Some(3),
             // A sword clears plants and cobwebs faster than anything.
-            (Some(Kind::Sword), Kind::Sword) => Some(3),
-            (Some(w), k) if w == k => Some(2),
-            // No particular tool wanted (dirt under a pickaxe still breaks):
-            // any tool is better than a bare hand.
-            (None, _) => Some(1),
-            _ => None,
+            (Kind::Sword, Kind::Sword) => Some(3),
+            (w, k) if w == k => Some(2),
+            // A wrong tool still swings; the game just mines slower.
+            _ => Some(1),
         }
     }
 }
@@ -94,10 +93,9 @@ fn tier_of(material: &str) -> u8 {
     }
 }
 
-/// The tool a block wants, from its id. This is a heuristic: the game's real
-/// answer lives in its block tags and item components, which this mod does not
-/// read yet (see README).
-pub fn block_kind(block: &str) -> Option<Kind> {
+/// The tool a block wants, from its id. A heuristic: the game's real answer is
+/// in its block tags and item components, which have no native API yet.
+pub fn block_kind(block: &str) -> Kind {
     let name = block.trim_start_matches("minecraft:");
     const AXE: [&str; 14] = [
         "log", "wood", "planks", "fence", "gate", "chest", "barrel", "bookshelf",
@@ -110,23 +108,23 @@ pub fn block_kind(block: &str) -> Option<Kind> {
     const SHEARS: [&str; 4] = ["cobweb", "wool", "vine", "leaves"];
     const SWORD: [&str; 3] = ["bamboo", "sugar_cane", "kelp"];
     if SHEARS.iter().any(|k| name.contains(k)) {
-        return Some(Kind::Shears);
+        return Kind::Shears;
     }
     if SWORD.iter().any(|k| name.contains(k)) {
-        return Some(Kind::Sword);
+        return Kind::Sword;
     }
     if AXE.iter().any(|k| name.contains(k)) {
-        return Some(Kind::Axe);
+        return Kind::Axe;
     }
     if SHOVEL.iter().any(|k| name.contains(k)) {
-        return Some(Kind::Shovel);
+        return Kind::Shovel;
     }
     if name.contains("wart_block") {
-        return Some(Kind::Hoe);
+        return Kind::Hoe;
     }
     // Everything else solid is a pickaxe block: stone, ores, deepslate,
     // bricks, terracotta, glass, ice and the rest.
-    Some(Kind::Pickaxe)
+    Kind::Pickaxe
 }
 
 /// Whether the mod is on, reading the stored setting the first time.
@@ -165,15 +163,33 @@ pub fn set_attack(pressed: bool) {
     ATTACK.with(|c| c.set(pressed));
 }
 
-/// The hotbar slot holding the best tool for `block`, if any tool fits or
-/// beats the bare hand.
-pub fn best_slot(inventory: &[Option<crate::game::ItemStack>], block: &str) -> Option<usize> {
-    let want = block_kind(block);
+/// Remember what the highlighted block wants, from the highlight hook.
+pub fn remember(kind: Kind) {
+    WANT.with(|c| c.set(Some(kind)));
+    WANT_TICK.with(|c| c.set(TICK.with(Cell::get)));
+}
+
+/// What the crosshair was on, if it was still there a moment ago: the
+/// highlight hook stops firing when the player looks at the sky.
+pub fn wanted() -> Option<Kind> {
+    let kind = WANT.with(Cell::get)?;
+    let age = TICK.with(Cell::get).wrapping_sub(WANT_TICK.with(Cell::get));
+    // Ten ticks is plenty for a frame hook that runs sixty times a second.
+    (age <= 10).then_some(kind)
+}
+
+/// Bump the tick counter, from the tick hook.
+pub fn tick() {
+    TICK.with(|c| c.set(c.get().wrapping_add(1)));
+}
+
+/// The hotbar slot holding the best tool for `kind`, if any.
+pub fn best_slot(inventory: &[Option<crate::game::ItemStack>], kind: Kind) -> Option<usize> {
     let mut best: Option<(u8, u8, usize)> = None; // score, tier, slot
     for (slot, stack) in inventory.iter().take(9).enumerate() {
         let Some(stack) = stack.as_ref() else { continue };
-        let Some((kind, tier)) = Kind::of_item(&stack.item) else { continue };
-        let Some(score) = kind.score(want) else { continue };
+        let Some((tool, tier)) = Kind::of_item(&stack.item) else { continue };
+        let Some(score) = tool.score(kind) else { continue };
         let better = match best {
             None => true,
             Some((s, t, _)) => (score, tier) > (s, t),
@@ -186,13 +202,15 @@ pub fn best_slot(inventory: &[Option<crate::game::ItemStack>], block: &str) -> O
 }
 
 /// Put the tool in `slot` in the player's hand, if it isn't already.
+///
+/// The only place the mod touches the game's internals: Horizon has no API to
+/// select a hotbar slot (the server-side `native_player_item_held` can only
+/// hear or cancel a change), so this writes the field the game's own hotbar
+/// keys write.
 pub fn select(game: &mut crate::game::Game<'_>, slot: usize) {
     if game.selected == slot {
         return;
     }
     game.selected = slot;
-    // The server learns of the change the way it learns of a hotbar key; the
-    // field is what the game sends from on its next network tick.
     game.level.selected_slot = slot as i32;
-    CHOSEN.with(|c| c.set(slot as i32));
 }
