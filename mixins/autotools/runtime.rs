@@ -1,11 +1,15 @@
-//! AutoTools 1.1: keep the fastest tool for the block under the crosshair in
-//! the player's hand while mining.
-//!
-//! Feedback from the first version: the target block now comes from Horizon's
-//! own hook point (`native_block_highlight`, API 86) instead of the mod calling
-//! the game's private raycast (`aim`, `clip_ray`, `world.block`, `res.facts`).
-//! What is left of the game's internals is one field: `Game::selected`, which
-//! has no stable API yet.
+// AutoTools 1.1: keep the fastest tool for the block under the crosshair in the
+// player's hand while mining.
+//
+// Not `//!`: horizon-mixins pastes a support module's source into the game and
+// refuses file attributes (an inner doc comment is one), so the header is a
+// plain comment.
+//
+// The target block now comes from Horizon's own hook point
+// (`native_block_highlight`, API 86) instead of the mod calling the game's
+// private raycast (`aim`, `clip_ray`, `world.block`, `res.facts`). What is left
+// of the game's internals is one field: `Game::selected`, which has no stable
+// API yet.
 use std::cell::Cell;
 
 /// The mod's id: its settings folder and its row in Options > Mods.
