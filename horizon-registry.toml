@@ -1,0 +1,37 @@
+name = "AutoTools"
+summary = "Keeps the fastest tool for the block you mine in your hand, and switches back when you look elsewhere."
+description = """
+Mining stone with a sword, or a tree with a pickaxe? **AutoTools** watches the block under your
+crosshair and puts the fastest tool from your hotbar in your hand, so the right one is selected
+by the time you swing.
+
+## What it does
+
+- While you hold the attack button, it scores the nine hotbar slots against the block you aim at
+  and switches to the best match: matching tool first, then the best material.
+- It changes exactly one thing — the selected slot. No inventory edits, nothing else automated.
+- Off until you turn it on: the toggle key is `` ` `` (backtick), rebindable in **Options → Mods**.
+- `AutoTools: on` / `AutoTools: off` shows above the hotbar for two seconds, with a quiet click
+  pitched differently for each state.
+- The state is remembered between sessions.
+
+## How it works
+
+A native mod for Horizon, not a `.jar`: seven hook points, including Horizon's own
+`native_block_highlight` for the block under the crosshair. No packet sniffing, no reading the
+server.
+
+## Compatibility
+
+Made for Horizon 26.3 and pinned to the commit it was built and played on. On a newer Horizon,
+build it with `horizon-launcher native-build --allow-version-mismatch`.
+
+## Honest notes
+
+This is a vibe-coded personal project: written by an AI agent in a few long sessions, tested on
+two machines, never reviewed. Tool choice is a heuristic — Horizon has no API for "how fast does
+this item break this block", so blocks are classified by id. Read the source before you trust it.
+"""
+
+authors = ["IIOTR1OD"]
+license = "MIT"
