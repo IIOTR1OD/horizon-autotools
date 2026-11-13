@@ -1,6 +1,6 @@
 [mod]
 id = "autotools"
-version = "1.1.3"
+version = "1.2.0"
 priority = 100
 
 # The commit the installed build already plays (`native-6475f62`), so this mod
@@ -27,6 +27,17 @@ id = "runtime"
 file = "crates/horizon-client/src/game.rs"
 name = "autotools"
 source = "runtime.rs"
+
+[[injection]]
+id = "hud"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_hud"
+helper = "hud.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "batch", ty = "&mut horizon_client::hud::HudBatch", value = "batch" },
+  { name = "corners", ty = "&mut horizon_client::extras_hud::Corners", value = "&mut *corners" },
+]
 
 [[injection]]
 id = "key"

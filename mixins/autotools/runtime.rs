@@ -19,7 +19,7 @@ pub const DESCRIPTION: &str =
     "Picks the fastest tool in your hotbar for the block you are mining. Toggle key, off by default.";
 /// The toggle key's name and its default: `~`/`` ` ``.
 pub const KEY: &str = "toggle";
-pub const DEFAULT_KEY: &str = "key.keyboard.grave";
+pub const DEFAULT_KEY: &str = "key.keyboard.grave.accent";
 /// The setting that remembers whether it is on.
 pub const ENABLED: &str = "enabled";
 
@@ -35,6 +35,9 @@ thread_local! {
     static WANT_TICK: Cell<u32> = const { Cell::new(0) };
     /// The tick counter, bumped by the tick hook.
     static TICK: Cell<u32> = const { Cell::new(0) };
+    /// How many ticks the "on/off" line stays on screen, and what it says.
+    static NOTICE: Cell<u32> = const { Cell::new(0) };
+    static NOTICE_ON: Cell<bool> = const { Cell::new(false) };
 }
 
 /// What kind of tool a block wants.
@@ -217,4 +220,20 @@ pub fn select(game: &mut crate::game::Game<'_>, slot: usize) {
     }
     game.selected = slot;
     game.level.selected_slot = slot as i32;
+}
+
+/// Show the on/off line for two seconds after a toggle.
+pub fn notify(on: bool) {
+    NOTICE.with(|c| c.set(40));
+    NOTICE_ON.with(|c| c.set(on));
+}
+
+/// Remember `on` for the line the HUD draws, and count its ticks down.
+pub fn tick_notice() -> Option<bool> {
+    let left = NOTICE.with(Cell::get);
+    if left == 0 {
+        return None;
+    }
+    NOTICE.with(|c| c.set(left - 1));
+    Some(NOTICE_ON.with(Cell::get))
 }

@@ -14,6 +14,20 @@ fn autotools_key(game: &mut crate::game::Game<'_>, key: &str, pressed: bool) {
     if !game.native_playing() {
         return;
     }
-    let game = &*game;
-    at::toggle(game);
+    let on = {
+        let game = &*game;
+        at::toggle(game)
+    };
+    let game = &mut *game;
+    at::notify(on);
+    // A quiet click while the line shows: higher when on, lower when off.
+    if let Some(p) = game.native_player() {
+        game.native_play_local_sound(
+            "minecraft:ui.button.click",
+            [p.x, p.y + 1.0, p.z],
+            0.4,
+            if on { 1.2 } else { 0.8 },
+            0,
+        );
+    }
 }

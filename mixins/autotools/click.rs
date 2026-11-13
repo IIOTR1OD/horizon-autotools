@@ -10,5 +10,7 @@ fn autotools_click(game: &mut crate::game::Game<'_>, mod_id: &str, button: usize
         return;
     }
     let game = &*game;
-    at::toggle(game);
+    let on = at::toggle(game);
+    let _ = game;
+    at::notify(on);
 }
