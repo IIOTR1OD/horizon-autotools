@@ -10,6 +10,7 @@ Adapted from horizon-native-mod-template/tools/package.py (MIT).
 """
 import hashlib
 import json
+import re
 import tomllib
 import zipfile
 from pathlib import Path
@@ -35,6 +36,16 @@ def package():
         raise SystemExit(f"rename mixins/{bundle.name}/ to mixins/{mod['id']}/ (the launcher finds it by id)")
     if mixin.get("compatibility", {}).get("horizon_revision") != COMPAT["horizon_revision"]:
         raise SystemExit("horizon-mixin.toml and this script pin different Horizon revisions")
+
+    # The game shows `runtime.rs`'s VERSION in Options > Mods, while the bundle
+    # manifest names the file: they drifted once (1.1.0 while the manifest said
+    # 1.2.0), so refuse to package when they disagree.
+    runtime = (bundle / "runtime.rs").read_text()
+    shown = re.search(r'pub const VERSION: &str = "([^"]+)"', runtime)
+    if not shown or shown.group(1) != mod["version"]:
+        raise SystemExit(
+            f"runtime.rs says {shown.group(1) if shown else 'nothing'}, "
+            f"horizon-mixin.toml says {mod['version']}: keep them in step")
 
     manifest = dict(
         schema=1,

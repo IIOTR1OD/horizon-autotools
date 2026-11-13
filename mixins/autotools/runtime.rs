@@ -14,7 +14,7 @@ use std::cell::Cell;
 
 /// The mod's id: its settings folder and its row in Options > Mods.
 pub const ID: &str = "autotools";
-pub const VERSION: &str = "1.1.0";
+pub const VERSION: &str = "1.2.1";
 pub const DESCRIPTION: &str =
     "Picks the fastest tool in your hotbar for the block you are mining. Toggle key, off by default.";
 /// The toggle key's name and its default: `~`/`` ` ``.
