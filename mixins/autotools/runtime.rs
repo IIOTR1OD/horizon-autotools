@@ -12,9 +12,11 @@
 // API yet.
 use std::cell::Cell;
 
+use crate::game::autotools_table as table;
+
 /// The mod's id: its settings folder and its row in Options > Mods.
 pub const ID: &str = "autotools";
-pub const VERSION: &str = "1.2.1";
+pub const VERSION: &str = "1.2.2";
 pub const DESCRIPTION: &str =
     "Picks the fastest tool in your hotbar for the block you are mining. Toggle key, off by default.";
 /// The toggle key's name and its default: `~`/`` ` ``.
@@ -104,23 +106,55 @@ fn tier_of(material: &str) -> u8 {
 /// in its block tags and item components, which have no native API yet.
 pub fn block_kind(block: &str) -> Kind {
     let name = block.trim_start_matches("minecraft:");
-    const AXE: [&str; 14] = [
-        "log", "wood", "planks", "fence", "gate", "chest", "barrel", "bookshelf",
-        "crafting_table", "ladder", "sign", "door", "trapdoor", "mushroom_block",
+    // The game's own answer first: the tags name every block it has, so this is
+    // exact for vanilla and for anything a data pack tags.
+    if let Some(kind) = table::tagged(name) {
+        return kind;
+    }
+    // Below is only for blocks no tag names: a modded block, or one the game
+    // lets you break with anything.
+    // Tool-specific blocks, whatever they are made of.
+    const SHEARS: &[&str] = &["cobweb", "wool", "vine", "leaves"];
+    const SWORD: &[&str] = &["bamboo", "sugar_cane", "kelp"];
+    // Blocks that need a pickaxe even though their id carries a shovel, axe or
+    // wood word: sandstone is stone, not sand; mud_bricks are bricks, not mud;
+    // an iron or copper door is not a wooden one.
+    const PICKAXE: &[&str] = &[
+        "stone", "ore", "deepslate", "brick", "terracotta", "glass", "ice", "obsidian",
+        "netherrack", "basalt", "tuff", "calcite", "amethyst", "copper", "quartz",
+        "purpur", "prismarine", "concrete", "magma", "ender", "petrified", "iron",
+        "blackstone",
     ];
-    const SHOVEL: [&str; 12] = [
+    // The wood itself: a slab, a stair or a button is wood when its material
+    // is, and the game wants an axe for it. Stone and metal ones are caught by
+    // the pickaxe list first; the rest fall through to the pickaxe default.
+    const WOOD: &[&str] = &[
+        "oak", "spruce", "birch", "jungle", "acacia", "mangrove", "cherry", "pale_oak",
+        "bamboo", "crimson", "warped", "wooden",
+    ];
+    // Wooden furniture whose id says nothing about its material.
+    const FURNITURE: &[&str] = &[
+        "bookshelf", "table", "loom", "note_block", "jukebox", "composter", "lectern",
+        "beehive", "bee_nest", "chest", "barrel", "ladder", "sign", "door", "trapdoor",
+        "fence", "gate", "planks", "log", "wood",
+    ];
+    const SHOVEL: &[&str] = &[
         "dirt", "grass_block", "podzol", "mycelium", "sand", "gravel", "clay", "snow",
         "farmland", "soul_soil", "soul_sand", "mud",
     ];
-    const SHEARS: [&str; 4] = ["cobweb", "wool", "vine", "leaves"];
-    const SWORD: [&str; 3] = ["bamboo", "sugar_cane", "kelp"];
     if SHEARS.iter().any(|k| name.contains(k)) {
         return Kind::Shears;
     }
     if SWORD.iter().any(|k| name.contains(k)) {
         return Kind::Sword;
     }
-    if AXE.iter().any(|k| name.contains(k)) {
+    if PICKAXE.iter().any(|k| name.contains(k)) {
+        return Kind::Pickaxe;
+    }
+    if WOOD.iter().any(|k| name.contains(k)) {
+        return Kind::Axe;
+    }
+    if FURNITURE.iter().any(|k| name.contains(k)) {
         return Kind::Axe;
     }
     if SHOVEL.iter().any(|k| name.contains(k)) {
@@ -129,8 +163,8 @@ pub fn block_kind(block: &str) -> Kind {
     if name.contains("wart_block") {
         return Kind::Hoe;
     }
-    // Everything else solid is a pickaxe block: stone, ores, deepslate,
-    // bricks, terracotta, glass, ice and the rest.
+    // Everything else solid is a pickaxe block: ores, bricks, terracotta,
+    // glass, ice and the rest.
     Kind::Pickaxe
 }
 

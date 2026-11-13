@@ -42,7 +42,7 @@ selects the new build. Update later with `horizon-launcher mods update-github`.
 ### From the `.hnmod` by hand
 
 ```sh
-unzip autotools-1.2.0.hnmod -d autotools
+unzip autotools-1.2.2.hnmod -d autotools
 horizon-launcher native-build ./autotools --trust-native-code
 ```
 

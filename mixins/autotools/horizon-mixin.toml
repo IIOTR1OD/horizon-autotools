@@ -1,6 +1,6 @@
 [mod]
 id = "autotools"
-version = "1.2.1"
+version = "1.2.2"
 priority = 100
 
 # The commit the installed build already plays (`native-6475f62`), so this mod
@@ -21,6 +21,12 @@ bindings = [
   { name = "partial", ty = "f32", value = "partial" },
   { name = "canceled", ty = "&mut bool", value = "&mut *canceled" },
 ]
+
+[[module]]
+id = "table"
+file = "crates/horizon-client/src/game.rs"
+name = "autotools_table"
+source = "table.rs"
 
 [[module]]
 id = "runtime"
