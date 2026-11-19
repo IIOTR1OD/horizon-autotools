@@ -1,76 +1,43 @@
 #!/usr/bin/env python3
-"""Package AutoTools as a source-only `.hnmod`, the file Horizon's launcher takes.
+"""Package AutoTools as a `.hmod`: the flat Horizon code-mod package.
 
-The archive holds `horizon-native.json` and `mixins/<id>/` (only `.rs` and `.toml`),
-with fixed dates and modes, so the same sources always give the same bytes and the
-same SHA-256. The launcher compiles it on the pinned Horizon revision; nothing here
-is built or run.
-
-Adapted from horizon-native-mod-template/tools/package.py (MIT).
+The archive holds `horizon-mod.toml`, `Cargo.toml`, `src/` and `assets/`, with fixed
+dates and modes, so the same sources always give the same bytes and the same SHA-256.
+The launcher compiles it against the build it pins; nothing here is built or run.
 """
 import hashlib
-import json
 import re
 import tomllib
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-GAME = "26.3"
-# The Horizon build this mod was written on (the installed `native-6475f62`), and
-# the horizon-mixins revision that build used.
-COMPAT = {
-    "horizon_revision": "6475f62f3c834b7489e1816bf47f47ea5eb2b879",
-    "horizon_mixins_revision": "5a64af938ec86b00d53d16a408aabc0038fb3e57",
-}
+DATE = (2026, 11, 19, 0, 0, 0)
+FILES = ["horizon-mod.toml", "Cargo.toml"]
 
 
-def package():
-    manifests = sorted((ROOT / "mixins").glob("*/horizon-mixin.toml"))
-    if len(manifests) != 1:
-        raise SystemExit("a .hnmod holds one bundle: keep one mixins/<id>/horizon-mixin.toml")
-    bundle = manifests[0].parent
-    mixin = tomllib.loads(manifests[0].read_text())
-    mod = mixin["mod"]
-    if bundle.name != mod["id"]:
-        raise SystemExit(f"rename mixins/{bundle.name}/ to mixins/{mod['id']}/ (the launcher finds it by id)")
-    if mixin.get("compatibility", {}).get("horizon_revision") != COMPAT["horizon_revision"]:
-        raise SystemExit("horizon-mixin.toml and this script pin different Horizon revisions")
+def sources() -> list[Path]:
+    out = [ROOT / f for f in FILES]
+    for folder in ("src", "assets"):
+        out += sorted((ROOT / folder).rglob("*"))
+    return [p for p in out if p.is_file()]
 
-    # The game shows `runtime.rs`'s VERSION in Options > Mods, while the bundle
-    # manifest names the file: they drifted once (1.1.0 while the manifest said
-    # 1.2.0), so refuse to package when they disagree.
-    runtime = (bundle / "runtime.rs").read_text()
-    shown = re.search(r'pub const VERSION: &str = "([^"]+)"', runtime)
-    if not shown or shown.group(1) != mod["version"]:
-        raise SystemExit(
-            f"runtime.rs says {shown.group(1) if shown else 'nothing'}, "
-            f"horizon-mixin.toml says {mod['version']}: keep them in step")
 
-    manifest = dict(
-        schema=1,
-        id=mod["id"],
-        version=mod["version"],
-        game=GAME,
-        horizon=COMPAT["horizon_revision"],
-        mixins=COMPAT["horizon_mixins_revision"],
-    )
-    files = {"horizon-native.json": (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()}
-    for path in sorted(bundle.iterdir()):
-        if path.is_file() and path.suffix in (".rs", ".toml"):
-            files[path.relative_to(ROOT).as_posix()] = path.read_bytes()
-
-    out = ROOT / "target" / f"{mod['id']}-{mod['version']}.hnmod"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for name, content in sorted(files.items()):
-            info = zipfile.ZipInfo(name, (2026, 1, 1, 0, 0, 0))
+def main() -> None:
+    manifest = tomllib.loads((ROOT / "horizon-mod.toml").read_text())
+    mod_id, version = manifest["id"], manifest["version"]
+    if not re.fullmatch(r"[a-z0-9_]{1,64}", mod_id):
+        raise SystemExit(f"bad id {mod_id!r}")
+    out = ROOT / f"{mod_id}-{version}.hmod"
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for path in sources():
+            info = zipfile.ZipInfo(str(path.relative_to(ROOT)), DATE)
             info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = 0o100644 << 16
-            archive.writestr(info, content)
-    print(json.dumps(dict(file=str(out), size=out.stat().st_size,
-                          sha256=hashlib.sha256(out.read_bytes()).hexdigest()), indent=2))
+            info.external_attr = 0o644 << 16
+            zip_file.writestr(info, path.read_bytes())
+    digest = hashlib.sha256(out.read_bytes()).hexdigest()
+    print(f"{out.name}: {out.stat().st_size} bytes, sha256 {digest}")
 
 
 if __name__ == "__main__":
-    package()
+    main()

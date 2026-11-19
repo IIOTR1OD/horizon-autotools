@@ -1,0 +1,18 @@
+{
+  "autotools.setting.enabled": "AutoTools on",
+  "autotools.setting.toggle_key": "Toggle key",
+  "autotools.key.grave": "`",
+  "autotools.key.period": ".",
+  "autotools.key.b": "B",
+  "autotools.key.n": "N",
+  "autotools.key.g": "G",
+  "autotools.key.h": "H",
+  "autotools.key.j": "J",
+  "autotools.key.k": "K",
+  "autotools.key.f6": "F6",
+  "autotools.key.f7": "F7",
+  "autotools.key.f8": "F8",
+  "autotools.key.f9": "F9",
+  "autotools.key.backslash": "\\",
+  "autotools.key.semicolon": ";"
+}

@@ -1,0 +1,13 @@
+id = "autotools"
+name = "AutoTools"
+version = "1.3.0"
+description = "Keeps the fastest tool in your hotbar for the block you are mining. Toggle key, off by default."
+api = "0.2"
+side = "both"
+capabilities = ["registries"]
+
+[native]
+game = "26.3"
+horizon = "dd67b76ff23e28c6d8e21859df600d31572f81a0"
+mixins = "e59da9094f0c2fdda6c627fe9eff22dec6a906f0"
+

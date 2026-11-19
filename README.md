@@ -36,38 +36,35 @@ carry for it. One key turns it off when you want to choose yourself.
 horizon-launcher mods add-github https://github.com/IIOTR1OD/horizon-autotools
 ```
 
-Horizon resolves the latest release, checks the `.hnmod`, builds it into your instance and
-selects the new build. Update later with `horizon-launcher mods update-github`.
+Horizon resolves the latest release, checks the `.hmod`, compiles it against the build you play
+and selects the new build. Update later with `horizon-launcher mods update-github`.
 
-### From the `.hnmod` by hand
+### From the `.hmod` by hand
 
 ```sh
-unzip autotools-1.2.2.hnmod -d autotools
-horizon-launcher native-build ./autotools --trust-native-code
+cp autotools-1.3.0.hmod ~/.local/share/horizon/horizon-native-mods/
+printf 'mod.autotools:true\n' >> ~/.local/share/horizon/horizon-mods.txt
+horizon-launcher native-build --trust-native-code
 ```
 
-`native-build` takes an unpacked `.hnmod` — unpacking *is* installing. The launcher brings its
-own Rust toolchain, so you do not need `cargo` on your machine.
+The launcher brings its own Rust toolchain, so you do not need `cargo` on your machine.
 
 ### From a checkout
 
 ```sh
 git clone https://github.com/IIOTR1OD/horizon-autotools
 cd horizon-autotools
-horizon-launcher native-build . --profile dev --trust-native-code
+horizon-launcher native-build . --trust-native-code
 ```
 
-`--profile dev` rebuilds fastest and runs slowest — the right trade while you are iterating.
-For playing, drop the flag (or pass `--profile performance`).
-
-Either way the first build compiles the game's client crate, so expect ten minutes or so. Later
-builds reuse the cache and are quicker.
+A native build compiles only the mods against the prebuilt game: seconds, not minutes. The game
+is never rebuilt.
 
 ## Use
 
 | | |
 |---|---|
-| Toggle | `` ` `` — or whatever you bind in **Options → Mods → AutoTools** |
+| Toggle | `` ` `` — or whatever you pick in **Options → Mods → AutoTools → Config** |
 | Where | While mining: hold attack, the slot switches by itself |
 | What it picks | The matching tool with the best material: netherite > diamond > iron > stone > wood, gold above netherite because vanilla mines faster with it |
 | What it never does | Move items, use items, hit things for you, read the server |
@@ -75,35 +72,36 @@ builds reuse the cache and are quicker.
 Nothing happens while you are not attacking, and the moment your crosshair leaves a block the
 mod stops caring: a block seen more than half a second ago is not acted on.
 
+### Known limitation (1.3.0)
+
+Reading the nine hotbar slots needs data the client API does not expose. AutoTools takes it from
+the server side of the same process, so it works in single player and when you host a LAN world.
+On a remote server the server does not have the mod, so it cannot see your hotbar and does not
+switch anything. The client-only mixin that would fix this fails to compile in launcher 0.2.81
+(`E0603` in the generated patch crate); it comes back when that is fixed.
+
 ## How it works
 
-AutoTools is a **native mod**: source that Horizon compiles into the game, not a `.jar`. It adds
-one module beside the game's code and hooks seven points:
+AutoTools is a **native mod**: a Rust crate the launcher compiles against the prebuilt game —
+never a `.jar`, and the game itself is not rebuilt. It answers five mod-API hooks:
 
 | hook | what it does |
 |---|---|
-| `native_block_highlight` (API 86) | every frame the crosshair is on a block: note what tool it wants |
-| `native_tick` | once a tick while attacking: pick the slot and select it |
-| `native_mouse_button_post` | remember whether the attack button is held |
-| `native_key` | the toggle key |
-| `native_hud` | draw the two-second `on/off` line |
-| `native_mods` / `native_settings` / `native_settings_click` | the row, the page and the button in **Options → Mods** |
+| `block_highlight` | every frame the crosshair is on a block: remember what tool it wants |
+| `client_tick_pre` | once a tick while attacking: pick the slot and select it |
+| `input_key` | the toggle key |
+| `gui_render_post` | draw the two-second `on/off` line above the hotbar |
+| `register` | the mod page in **Options → Mods**: `AutoTools on` and the toggle key |
 
-The block's name comes from `native_state_block(state)`, so the mod does not have to guess at
-the game's internals.
+The block's name comes from `block_state_string(state)`, and the hotbar slot is chosen with
+`select_hotbar_slot` — no game internals are written, and the mod needs no mixin.
 
 ## Compatibility
 
-The `.hnmod` is pinned to one Horizon commit (`6475f62f…`, the build it was written and played
-on). Horizon's API moves fast; a mod built for another commit is refused with *"made for another
-Horizon version"*. Two ways out:
-
-- build with `--allow-version-mismatch` (usually works — the hooks this mod uses are stable);
-- re-pin `horizon_revision` in `mixins/autotools/horizon-mixin.toml` and `horizon` in
-  `horizon-native.json` to your commit, then build.
-
-The mod is not on Horizon's registry, so the launcher labels it *"Not made or endorsed by the
-Horizon project"*. That is accurate.
+`horizon-mod.toml` pins one exact Horizon build (`dd67b76…`, Nightly 2026-11-18). The launcher
+refuses a build made for another revision; the way forward is to bump `[native] horizon`,
+`mixins` and the SDK in `.horizon/sdk/` to the build you play (that is what
+`cargo horizon-mod update` does), then rebuild.
 
 ## Known limitations
 
@@ -111,36 +109,29 @@ Horizon project"*. That is accurate.
   this block", so AutoTools classifies blocks by id (`_log` → axe, `_ore` → pickaxe, `dirt` →
   shovel, …) and tools by their suffix. Vanilla blocks are almost always right; modded blocks
   fall back to "pickaxe".
-- **Switching mid-dig resets the dig.** Exactly as pressing a hotbar key would. That is what
-  makes it feel instant, and it is also why it can feel jumpy on a laggy server.
-- **One internal field.** Selecting a slot is the only thing Horizon has no API for yet, so the
-  mod writes `Game::selected` — the same field the hotbar keys write. When a `select_slot`
-  helper lands, this becomes a pure hook mod and the pin can go.
-- **Two machines tested.** Not a compatibility matrix.
-- **No server-side story.** It is client-side by design: nothing is sent to the server except
-  the slot change the game itself already sends.
+- **Switching mid-dig resets the dig.** Exactly as pressing a hotbar key would.
+- **Remote servers.** See the limitation above: the hotbar is read on the server side of the
+  same process, so single player and LAN hosting work, a remote server does not.
+- **No sound yet.** The on/off line is drawn, but the click is not played (the sound helper
+  needs a typed `SoundPlay` the mod does not build yet).
 
 ## Layout
 
 ```
-horizon-native.json          bundle manifest (an unpacked .hnmod is a checkout)
-mixins/autotools/
-  horizon-mixin.toml         the seven injections
-  runtime.rs                 state, scoring, the one field write
-  highlight.rs               target block → tool kind
-  tick.rs                    the switch
-  key.rs, mouse.rs           input
-  hud.rs                     the on/off line
-  list.rs, settings.rs, click.rs   Options > Mods
-package.py                   builds target/autotools-<version>.hnmod
+horizon-mod.toml             the manifest: id, version, api, [native] pins
+Cargo.toml                   one crate, the SDK by the path the launcher stages
+src/lib.rs                   the hooks, the scoring, the settings
+src/table.rs                 blocks → tool, generated from the game's block tags
+assets/autotools/lang/       en_us and ru_ru labels
+package.py                   builds autotools-<version>.hmod
 ```
 
 ## Sharing
 
-`python3 package.py` writes `target/autotools-<version>.hnmod`: a zip of the manifest and the
-`.rs`/`.toml` sources, nothing compiled. Send that file; the other side builds it for their own
-machine and their own Horizon. A compiled binary cannot be passed around — native mods are
-compiled into the game, not loaded beside it.
+`python3 package.py` writes `autotools-<version>.hmod`: a zip of the manifest, the crate and the
+assets, nothing compiled, with fixed dates so the bytes are reproducible. Send that file; the
+other side's launcher compiles it for their own build. A compiled library cannot be passed
+around — native mods are linked to one exact game build.
 
 ## License
 

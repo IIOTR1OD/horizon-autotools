@@ -5,7 +5,7 @@
 // A block no tag names (a modded one) falls through to the heuristics in
 // `runtime.rs`.
 
-use crate::game::autotools::Kind;
+use crate::Kind;
 
 /// The tool the game itself wants for a block, or `None` when no tag names it.
 pub fn tagged(name: &str) -> Option<Kind> {
